@@ -17,10 +17,10 @@
 	<a-scene embedded arjs="debugUIEnabled:false;" vr-mode-ui="enabled: false">
 
  <a-assets>
-   <a-asset-item id="model1" src="glb/potipa_walk.glb"></a-asset-item>
+   <a-asset-item id="model1" src=".glb/potipa_walk.glb"></a-asset-item>
  </a-assets>
   <!-- 作成したマーカーでのソース potipa_panch.glb-->
-<a-marker type="pattern" url="pattern/pattern-Rpo3d.patt">
+<a-marker type="pattern" url=".pattern/pattern-Rpo3d.patt">
 	<a-image src="#siba" position="0 5 0.5" rotation="0 0 0" scale="1 1 1"></a-image>
 	<a-entity gltf-model="#model1" animation-mixer position="0 0 0" rotation="0 0 0" scale="1 1 1" visible="true"></a-entity>
 </a-marker>
