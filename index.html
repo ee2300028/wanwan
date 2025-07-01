@@ -1,24 +1,286 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <!-- A-Frame ライブラリの読み込み -->
-  <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script> 
-  <script src="https://jeromeetienne.github.io/AR.js/aframe/build/aframe-ar.js"></script>
-  <script src="https://cdn.rawgit.com/donmccurdy/aframe-extras/v5.0.0/dist/aframe-extras.min.js"></script>
-  <title>wanwan-qr</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>wanwan-qr - 3D ARアプリ</title>
+    
+    <!-- A-Frame ライブラリの読み込み（最新版） -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <!-- AR.js ライブラリの読み込み -->
+    <script src="https://jeromeetienne.github.io/AR.js/aframe/build/aframe-ar.js"></script>
+    <!-- A-Frame extras（最新の安定したCDN） -->
+    <script src="https://cdn.jsdelivr.net/gh/donmccurdy/aframe-extras@v6.1.1/dist/aframe-extras.min.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        /* ローディング画面 */
+        #loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            color: white;
+            text-align: center;
+        }
+        
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid white;
+            width: 40px;
+            height: 40px;
+            animation: spin 2s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 情報オーバーレイ */
+        .info-overlay {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 1000;
+            max-width: 300px;
+        }
+        
+        .info-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #FFD700;
+        }
+        
+        /* エラーメッセージ */
+        .error-message {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            right: 20px;
+            background: rgba(255, 0, 0, 0.9);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            z-index: 1001;
+            display: none;
+        }
+        
+        /* 隠す用のクラス */
+        .hidden {
+            display: none !important;
+        }
+    </style>
 </head>
-<body style="margin: 0px; overflow: hidden;">
-  <!-- デバッグ用の画面表示、VR用のボタンをそれぞれ非表示に -->
-  <a-scene embedded arjs="debugUIEnabled:false;" vr-mode-ui="enabled: false">
-    <a-assets>
-      <a-asset-item id="model1" src="potipa_walk.glb"></a-asset-item>
-    </a-assets>
-    <!-- 作成したマーカーでのソース potipa_panch.glb-->
-    <a-marker type="pattern" url="pattern-po3d.patt">
-      <a-entity gltf-model="#model1" animation-mixer position="0 0 0" rotation="0 0 0" scale="1 1 1" visible="true"></a-entity>
-    </a-marker>
-    <a-entity camera look-controls></a-entity>
-  </a-scene>
+<body>
+    <!-- ローディング画面 -->
+    <div id="loading">
+        <div class="spinner"></div>
+        <h2>🐕 3D ARアプリを読み込み中...</h2>
+        <p>カメラアクセスを許可してください</p>
+    </div>
+    
+    <!-- 使用方法の説明 -->
+    <div class="info-overlay" id="info">
+        <div class="info-title">📱 使用方法</div>
+        <div>カスタムマーカーに向けてください</div>
+        <div style="margin-top: 8px; font-size: 12px;">
+            ⚠️ マーカーファイル「pattern-po3d.patt」が必要です
+        </div>
+    </div>
+    
+    <!-- エラーメッセージ -->
+    <div class="error-message" id="errorMessage"></div>
+
+    <!-- ARシーンの設定 -->
+    <a-scene 
+        id="arScene"
+        embedded 
+        arjs="debugUIEnabled: false; sourceType: webcam; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; antialias: true; colorManagement: true;"
+        loading-screen="enabled: false">
+        
+        <!-- アセットの事前読み込み -->
+        <a-assets timeout="10000">
+            <a-asset-item 
+                id="model1" 
+                src="potipa_walk.glb"
+                response-type="arraybuffer">
+            </a-asset-item>
+        </a-assets>
+        
+        <!-- カスタムマーカーパターンでの認識設定 -->
+        <a-marker 
+            type="pattern" 
+            url="pattern-po3d.patt"
+            id="customMarker"
+            emitevents="true"
+            smooth="true"
+            smoothcount="10"
+            smoothtolerance="0.01">
+            
+            <!-- 3Dモデルの表示とアニメーション -->
+            <a-entity 
+                id="model"
+                gltf-model="#model1" 
+                animation-mixer="clip: *; loop: repeat; crossFadeDuration: 0.3"
+                position="0 0 0" 
+                rotation="0 0 0" 
+                scale="1 1 1" 
+                visible="true"
+                shadow="cast: true; receive: false">
+                
+                <!-- モデル認識時のエフェクト -->
+                <a-animation
+                    attribute="scale"
+                    from="0 0 0"
+                    to="1 1 1"
+                    dur="1000"
+                    easing="ease-out-elastic"
+                    begin="markerFound">
+                </a-animation>
+                
+            </a-entity>
+            
+            <!-- 地面の影 -->
+            <a-plane 
+                position="0 0 0" 
+                rotation="-90 0 0" 
+                width="2" 
+                height="2" 
+                color="#7BC8A4" 
+                opacity="0.3"
+                shadow="receive: true">
+            </a-plane>
+            
+        </a-marker>
+        
+        <!-- カメラの設定 -->
+        <a-entity camera look-controls="enabled: false"></a-entity>
+        
+        <!-- 環境光とディレクショナルライト -->
+        <a-light type="ambient" color="#404040" intensity="0.4"></a-light>
+        <a-light type="directional" position="1 1 1" color="#ffffff" intensity="0.8" 
+                 shadow="cast: true; shadowMapHeight: 1024; shadowMapWidth: 1024">
+        </a-light>
+        
+    </a-scene>
+
+    <script>
+        let assetsLoaded = false;
+        let sceneReady = false;
+        
+        // エラー表示関数
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+        
+        // ローディング完了処理
+        function hideLoading() {
+            if (assetsLoaded && sceneReady) {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+        
+        // A-Frameシーンの初期化完了
+        document.querySelector('a-scene').addEventListener('loaded', function() {
+            console.log('ARシーンが読み込まれました');
+            sceneReady = true;
+            hideLoading();
+        });
+        
+        // アセット読み込み完了
+        document.querySelector('a-assets').addEventListener('loaded', function() {
+            console.log('すべてのアセットが読み込まれました');
+            assetsLoaded = true;
+            hideLoading();
+        });
+        
+        // アセット読み込みタイムアウト
+        document.querySelector('a-assets').addEventListener('timeout', function() {
+            console.error('アセットの読み込みがタイムアウトしました');
+            showError('3Dモデルの読み込みに失敗しました。ファイルを確認してください。');
+            hideLoading();
+        });
+        
+        // マーカー認識イベント
+        document.querySelector('#customMarker').addEventListener('markerFound', function() {
+            console.log('カスタムマーカーが認識されました！');
+            const model = document.querySelector('#model');
+            if (model) {
+                model.setAttribute('visible', 'true');
+            }
+        });
+        
+        document.querySelector('#customMarker').addEventListener('markerLost', function() {
+            console.log('カスタムマーカーが見失われました');
+        });
+        
+        // 3Dモデル読み込みエラー処理
+        document.querySelector('#model1').addEventListener('error', function(e) {
+            console.error('3Dモデルの読み込みエラー:', e);
+            showError('3Dモデル「potipa_walk.glb」が見つかりません。ファイルを確認してください。');
+        });
+        
+        // マーカーパターン読み込みエラー処理
+        document.querySelector('#customMarker').addEventListener('error', function(e) {
+            console.error('マーカーパターンの読み込みエラー:', e);
+            showError('マーカーパターン「pattern-po3d.patt」が見つかりません。ファイルを確認してください。');
+        });
+        
+        // カメラアクセス確認
+        navigator.mediaDevices.getUserMedia({video: true})
+            .then(function(stream) {
+                console.log('カメラアクセス許可されました');
+                stream.getTracks().forEach(track => track.stop());
+            })
+            .catch(function(err) {
+                console.error('カメラアクセスエラー:', err);
+                showError('カメラへのアクセスが必要です。ブラウザの設定を確認してください。');
+                hideLoading();
+            });
+        
+        // ページ読み込み完了後のタイムアウト処理
+        setTimeout(() => {
+            if (!assetsLoaded || !sceneReady) {
+                console.warn('読み込みが完了しませんでした');
+                hideLoading();
+            }
+        }, 15000); // 15秒でタイムアウト
+        
+        // グローバルエラーハンドリング
+        window.addEventListener('error', function(e) {
+            console.error('予期しないエラー:', e.error);
+            showError('エラーが発生しました: ' + e.message);
+        });
+        
+    </script>
 </body>
 </html>
